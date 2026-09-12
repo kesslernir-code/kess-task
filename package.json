@@ -1,7 +1,7 @@
 {
   "name": "kess-task",
   "version": "1.0.0",
-  "description": "",
+  "description": "Kess Task - Hebrew RTL task and project manager (PWA) backed by Supabase",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -12,9 +12,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.100.1",
     "@supabase/supabase-js": "^2.106.2",
-    "dotenv": "^16.4.5",
-    "ws": "^8.21.0"
+    "dotenv": "^16.4.5"
   }
 }
