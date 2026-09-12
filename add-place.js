@@ -503,7 +503,7 @@ async function main() {
 
   console.log('\n═══════════════════════════════════');
   console.log('Done! Saved ' + saved + ' events for ' + name);
-  console.log('Live at: kesslernir-code.github.io/underground-radar');
+  console.log('Live at: kesslernir-code.github.io/kess-task');
   console.log('═══════════════════════════════════\n');
 }
 

@@ -1,4 +1,4 @@
-# Underground Radar — Project Status
+# Kess Task — Project Status
 
 _Last updated: June 4, 2026_
 
@@ -86,15 +86,15 @@ _Last updated: June 4, 2026_
 
 A scraper + frontend that aggregates underground events (concerts, parties, art shows) from Tel Aviv / Jerusalem venues into one feed. Stack: Node.js · Supabase · Puppeteer · Anthropic API · plain HTML frontend.
 
-**Repo:** https://github.com/kesslernir-code/underground-radar  
-**Local folder:** `C:\Users\kessl\Documents\underground-radar`
+**Repo:** https://github.com/kesslernir-code/kess-task  
+**Local folder:** `G:\My Drive\Kess AI\kess-task`
 
 ---
 
 ## File Structure
 
 ```
-underground-radar/
+kess-task/
 ├── index.html          — Frontend UI (runs locally, connects directly to Supabase)
 ├── Index2.html         — Draft / alternate version (unused)
 ├── server.js           — Local server on port 3001: handles "add place" requests + triggers scraping
