@@ -23,6 +23,7 @@ var TIME_BUDGET_MS = 4.5 * 60 * 1000;   // Apps Script cancels a run at 6 minute
 var AUTOMATED_SENDER = /no-?reply|do-?not-?reply|notif|alert|mailer-daemon|bounce/i;
 var BACKFILL_DAYS = 60;
 var BACKFILL_PROJECT = 'ייבוא Gmail';
+var BACKFILL_ENABLED = false;           // backfill() only runs when true
 
 var PROMPT =
   'You sort a person\'s incoming email. Decide whether the email asks the recipient to ' +
@@ -110,6 +111,11 @@ function startBackfill() {
 }
 
 function backfill() {
+  if (!BACKFILL_ENABLED) {
+    stopBackfill();
+    console.log('Backfill paused');
+    return;
+  }
   var started = Date.now();
   var props = PropertiesService.getScriptProperties();
   var offset = Number(props.getProperty('BACKFILL_OFFSET') || 0);
