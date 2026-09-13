@@ -36,7 +36,8 @@ https://github.com/kesslernir-code/kessler-time
 |---|---|
 | `index.html` | The whole app. Hebrew RTL, PWA, supabase-js from jsDelivr. |
 | `manifest.json`, `icon.svg` | PWA assets. |
-| `apps-script/gmail-to-tasks.gs` | Gmail → Gemini → task. Pasted into script.google.com; not run from this repo. |
+| `apps-script/gmail-to-tasks.gs` | Gmail → Gemini → task. Runs in Apps Script ("kess task gmail"), not from this repo. |
+| `apps-script/appsscript.json`, `.clasp.json` | Apps Script manifest and clasp link. Deploy with `clasp push --force` from `apps-script/` (clasp installed globally on C:, logged in as kesslernir@gmail.com). A push replaces every file in the Apps Script project. |
 
 ## Data
 
