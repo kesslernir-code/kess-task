@@ -11,6 +11,7 @@
 //   KESS_TASK_TOKEN  - the token that lets this script add tasks
 //
 // First time: run setup() once, then checkGmail() once to test.
+// To import older mail: run startBackfill() once (see backfill below).
 
 var SUPABASE_URL = 'https://qmbdtswkeaayvsufphav.supabase.co';
 var SUPABASE_KEY = 'sb_publishable_VSAG1svbd57fNRlQ1r_r5A_cEPgU2nM';
@@ -20,6 +21,8 @@ var MAX_OUTPUT_TOKENS = 300;            // a normal answer is ~60 tokens; ends r
 var MAX_TITLE_CHARS = 80;               // longer titles are a runaway answer, not a task
 var TIME_BUDGET_MS = 4.5 * 60 * 1000;   // Apps Script cancels a run at 6 minutes
 var AUTOMATED_SENDER = /no-?reply|do-?not-?reply|notif|alert|mailer-daemon|bounce/i;
+var BACKFILL_DAYS = 60;
+var BACKFILL_PROJECT = 'ייבוא Gmail';
 
 var PROMPT =
   'You sort a person\'s incoming email. Decide whether the email asks the recipient to ' +
@@ -90,6 +93,76 @@ function checkGmail() {
   }
 }
 
+// One-off import of the last BACKFILL_DAYS of Primary-inbox mail into the
+// BACKFILL_PROJECT project for review. Run startBackfill() once; a 5-minute
+// trigger keeps calling backfill() until every conversation is done, then
+// removes itself. Only the latest message of each conversation is checked.
+// Skipped: conversations where you sent the last reply, automated senders,
+// and tasks whose due date has already passed. Mail newer than the start is
+// left to checkGmail.
+function startBackfill() {
+  var props = PropertiesService.getScriptProperties();
+  props.setProperty('BACKFILL_OFFSET', '0');
+  props.setProperty('BACKFILL_UNTIL_MS', String(Date.now()));
+  stopBackfill();
+  ScriptApp.newTrigger('backfill').timeBased().everyMinutes(5).create();
+  backfill();
+}
+
+function backfill() {
+  var started = Date.now();
+  var props = PropertiesService.getScriptProperties();
+  var offset = Number(props.getProperty('BACKFILL_OFFSET') || 0);
+  var untilMs = Number(props.getProperty('BACKFILL_UNTIL_MS')) || started;
+  var apiKey = props.getProperty('GEMINI_API_KEY');
+  var token = props.getProperty('KESS_TASK_TOKEN');
+  var me = Session.getEffectiveUser().getEmail().toLowerCase();
+  var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  var fromMe = function(msg) { return msg.getFrom().toLowerCase().indexOf(me) !== -1; };
+
+  while (true) {
+    var threads = GmailApp.search('in:inbox category:primary newer_than:' + BACKFILL_DAYS + 'd', offset, 20);
+    if (!threads.length) {
+      stopBackfill();
+      console.log('Backfill done');
+      return;
+    }
+    for (var i = 0; i < threads.length; i++) {
+      if (Date.now() - started > TIME_BUDGET_MS) {
+        console.log('Time budget reached at conversation ' + offset + '; continuing in 5 minutes');
+        return;
+      }
+      var msgs = threads[i].getMessages();
+      var last = msgs[msgs.length - 1];
+      if (last.getDate().getTime() > untilMs) {
+        console.log('newer than the backfill start; left to checkGmail');
+      } else if (fromMe(last) && !msgs.every(fromMe)) {
+        console.log('you replied last; skipped');
+      } else if (isAutomated(last)) {
+        console.log('automated sender; skipped');
+      } else {
+        var task = extractTask(last, apiKey);
+        if (task && /^\d{4}-\d{2}-\d{2}$/.test(task.due_date || '') && task.due_date < today) {
+          console.log('due date ' + task.due_date + ' already passed; skipped');
+        } else if (task) {
+          saveTask(last, task, token, BACKFILL_PROJECT);
+          console.log('task');
+        } else {
+          console.log('not a task');
+        }
+      }
+      offset++;
+      props.setProperty('BACKFILL_OFFSET', String(offset));
+    }
+  }
+}
+
+function stopBackfill() {
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === 'backfill') ScriptApp.deleteTrigger(t);
+  });
+}
+
 function isAutomated(msg) {
   return AUTOMATED_SENDER.test(msg.getFrom()) || !!msg.getHeader('List-Unsubscribe');
 }
@@ -138,7 +211,7 @@ function extractTask(msg, apiKey) {
   return out;
 }
 
-function saveTask(msg, task, token) {
+function saveTask(msg, task, token, projectName) {
   var res = UrlFetchApp.fetch(SUPABASE_URL + '/rest/v1/rpc/add_gmail_task', {
     method: 'post',
     contentType: 'application/json',
@@ -150,7 +223,8 @@ function saveTask(msg, task, token) {
       p_title: task.title,
       p_description: task.description || null,
       p_due_date: /^\d{4}-\d{2}-\d{2}$/.test(task.due_date || '') ? task.due_date : null,
-      p_priority: task.priority || 'normal'
+      p_priority: task.priority || 'normal',
+      p_project_name: projectName || null
     })
   });
   if (res.getResponseCode() >= 300) {

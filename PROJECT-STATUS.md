@@ -76,6 +76,17 @@ schema is not exposed through the API.
   stops itself after 4.5 minutes, so a slow run resumes instead of repeating.
 - Duplicates are ignored by the unique `gmail_message_id`. Apps Script emails
   the owner when a trigger fails.
+
+### Backfill (one-off)
+
+`startBackfill()` imports the last 60 days of Primary-inbox mail into the
+project **ייבוא Gmail** (created by `add_gmail_task`'s `p_project_name`) for
+review. A 5-minute trigger keeps calling `backfill()`, which pages through
+conversations with a saved offset (`BACKFILL_OFFSET`), and deletes itself when
+done. Per conversation only the latest message is checked; skipped are
+conversations where the owner sent the last reply (notes to self still count),
+automated senders, and tasks whose due date has passed. Mail newer than the
+start time (`BACKFILL_UNTIL_MS`) is left to `checkGmail`.
 - Needs a **paid-tier** Gemini API key: on the free tier Google may use and
   human-review the content, and its terms say not to send personal information.
 
