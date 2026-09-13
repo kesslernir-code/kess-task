@@ -16,7 +16,7 @@ https://github.com/kesslernir-code/kessler-time
 ## Architecture
 
 ```
-  browser / installed PWA                     Google Apps Script (every 15 min)
+  browser / installed PWA                     Google Apps Script (daily 07:00)  
           |                                    - new Primary-inbox Gmail messages
           v                                    - Gemini 3.5 Flash-Lite: is it a task?
   index.html  (GitHub Pages)                            |
@@ -37,7 +37,9 @@ https://github.com/kesslernir-code/kessler-time
 | `index.html` | The whole app. Hebrew RTL, PWA, supabase-js from jsDelivr. |
 | `manifest.json`, `icon.svg` | PWA assets. |
 | `apps-script/gmail-to-tasks.gs` | Gmail → Gemini → task. Runs in Apps Script ("kess task gmail"), not from this repo. |
-| `apps-script/appsscript.json`, `.clasp.json` | Apps Script manifest and clasp link. Deploy with `clasp push --force` from `apps-script/` (clasp installed globally on C:, logged in as kesslernir@gmail.com). A push replaces every file in the Apps Script project. |
+| `apps-script/appsscript.json`, `.clasp.json` | Apps Script manifest (including the web app) and clasp link. |
+| `apps-script/deploy.sh` | `clasp push --force`, then points the web app deployment (`deployment-id.txt`) at the new code. Needs clasp, installed globally on C: and logged in as kesslernir@gmail.com. A push replaces every file in the Apps Script project. |
+| `apps-script/run.sh` | Calls an action through the web app, e.g. `./run.sh dryRun '{"days":14,"limit":30}'`. Reads the runner secret from `~/.kess-task/runner-token.txt` on the local machine. |
 
 ## Data
 
@@ -63,40 +65,54 @@ schema is not exposed through the API.
 
 ## Gmail import
 
-- Searches `in:inbox category:primary` after the last processed message, up to
-  50 threads a run, and handles messages oldest first.
+- `checkGmail` runs once a day at 07:00 Asia/Jerusalem (set by `setup`). It
+  pages through every `in:inbox category:primary` message after the last
+  processed one and handles them oldest first.
 - Messages from automated senders (no-reply, notification, alert, bounce
   addresses) or carrying a `List-Unsubscribe` header are skipped without calling
   Gemini.
 - Every other message (subject, sender, first 6,000 characters of the body) goes
-  to Gemini with a JSON schema and a 300-token output cap; only messages judged
-  to be tasks are saved. An answer that does not finish, or whose title runs past
-  80 characters, counts as "not a task" — Gemini 3.5 Flash-Lite sometimes loops
-  inside the title string.
+  to Gemini in two calls. First a classification with a JSON schema and no free
+  text: `is_task`, `kind` (request / payment / meeting / document / none),
+  `due_date`, `priority`. Then, for tasks only, a plain-text Hebrew title, kept
+  to its first line and 80 characters, falling back to the email subject. Free
+  text inside JSON made Gemini 3.5 Flash-Lite loop, so titles are never JSON.
 - The checkpoint (`LAST_MESSAGE_MS`) advances after every message, and a run
   stops itself after 4.5 minutes, so a slow run resumes instead of repeating.
 - Duplicates are ignored by the unique `gmail_message_id`. Apps Script emails
   the owner when a trigger fails.
+- Needs a **paid-tier** Gemini API key: on the free tier Google may use and
+  human-review the content, and its terms say not to send personal information.
+
+### Remote runner
+
+The script is also a web app (`doPost`, anonymous access, runs as the owner).
+It does nothing unless the request carries the runner secret, whose SHA-256 is
+`RUNNER_TOKEN_HASH` in the script; the secret itself stays in
+`~/.kess-task/runner-token.txt`. Actions: `setup`, `checkGmail`, `dryRun`,
+`startBackfill`, `stopBackfill`, `status`. The response carries the run log.
+
+`dryRun` (`days`, `offset`, `limit`) reviews conversations like the backfill but
+saves nothing and moves no checkpoint; its log shows sender, subject, and the
+proposed title, for calibrating the prompt.
 
 ### Backfill (one-off)
 
-`startBackfill()` imports the last 60 days of Primary-inbox mail into the
-project **ייבוא Gmail** (created by `add_gmail_task`'s `p_project_name`) for
-review. A 5-minute trigger keeps calling `backfill()`, which pages through
-conversations with a saved offset (`BACKFILL_OFFSET`), and deletes itself when
-done. Per conversation only the latest message is checked; skipped are
-conversations where the owner sent the last reply (notes to self still count),
-automated senders, and tasks whose due date has passed. Mail newer than the
-start time (`BACKFILL_UNTIL_MS`) is left to `checkGmail`.
-- Needs a **paid-tier** Gemini API key: on the free tier Google may use and
-  human-review the content, and its terms say not to send personal information.
+`startBackfill` imports the last 60 days of Primary-inbox mail into the project
+**ייבוא Gmail** (created by `add_gmail_task`'s `p_project_name`) for review. A
+5-minute trigger keeps calling `backfill()`, which pages through conversations
+with a saved offset (`BACKFILL_OFFSET`) while `BACKFILL_ACTIVE` is `true`, and
+removes itself when done. Per conversation only the latest message is checked;
+skipped are conversations where the owner sent the last reply (notes to self
+still count), automated senders, and tasks whose due date has passed. Mail newer
+than the start time (`BACKFILL_UNTIL_MS`) is left to `checkGmail`.
 
 ## Costs
 
 | Piece | Cost |
 |---|---|
 | GitHub Pages | free |
-| Supabase | free plan (the 15-minute script also keeps the project from pausing for inactivity) |
+| Supabase | free plan (the daily script also keeps the project from pausing for inactivity) |
 | Google Apps Script | free (consumer quotas: 20,000 URL fetches/day, 90 min trigger runtime/day) |
 | Gemini 3.5 Flash-Lite | paid tier, ~$0.0007 per email at ~1,500 input tokens — roughly $2/month at 100 emails/day (2.5 Flash-Lite is closed to new users) |
 
