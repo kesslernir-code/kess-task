@@ -13,8 +13,10 @@
 
 var SUPABASE_URL = 'https://qmbdtswkeaayvsufphav.supabase.co';
 var SUPABASE_KEY = 'sb_publishable_VSAG1svbd57fNRlQ1r_r5A_cEPgU2nM';
-var MODEL = 'gemini-2.5-flash-lite';
+var MODEL = 'gemini-3.5-flash-lite';
 var MAX_BODY_CHARS = 6000;
+var MAX_OUTPUT_TOKENS = 1024;           // caps the time and cost of any single email
+var TIME_BUDGET_MS = 4.5 * 60 * 1000;   // Apps Script cancels a run at 6 minutes
 
 var PROMPT =
   'You sort a person\'s incoming email. Decide whether the email asks the recipient to ' +
@@ -42,28 +44,42 @@ function setup() {
   ScriptApp.getProjectTriggers().forEach(function(t) { ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('checkGmail').timeBased().everyMinutes(15).create();
   var props = PropertiesService.getScriptProperties();
-  if (!props.getProperty('LAST_CHECK')) {
-    props.setProperty('LAST_CHECK', String(Math.floor(Date.now() / 1000) - 3600));
+  if (!props.getProperty('LAST_MESSAGE_MS')) {
+    props.setProperty('LAST_MESSAGE_MS', String(Date.now() - 3600 * 1000));
   }
 }
 
 function checkGmail() {
+  var started = Date.now();
   var props = PropertiesService.getScriptProperties();
-  var since = Number(props.getProperty('LAST_CHECK')) || Math.floor(Date.now() / 1000) - 3600;
-  var now = Math.floor(Date.now() / 1000);
-  var threads = GmailApp.search('in:inbox category:primary after:' + since, 0, 50);
+  var lastMs = Number(props.getProperty('LAST_MESSAGE_MS')) || started - 3600 * 1000;
+  var apiKey = props.getProperty('GEMINI_API_KEY');
+  var token = props.getProperty('KESS_TASK_TOKEN');
 
-  threads.forEach(function(thread) {
-    thread.getMessages().forEach(function(msg) {
-      if (msg.getDate().getTime() / 1000 < since) return; // older message in the same thread
-      var task = extractTask(msg, props.getProperty('GEMINI_API_KEY'));
-      if (task) saveTask(msg, task, props.getProperty('KESS_TASK_TOKEN'));
+  // Oldest first, so the checkpoint can advance one message at a time.
+  var messages = [];
+  GmailApp.search('in:inbox category:primary after:' + Math.floor(lastMs / 1000), 0, 50)
+    .forEach(function(thread) {
+      thread.getMessages().forEach(function(msg) {
+        if (msg.getDate().getTime() > lastMs) messages.push(msg);
+      });
     });
-  });
+  messages.sort(function(a, b) { return a.getDate().getTime() - b.getDate().getTime(); });
+  console.log(messages.length + ' new message(s)');
 
-  // Only advanced after every message succeeded; a failed run is retried next time
-  // and duplicates are ignored by the database.
-  props.setProperty('LAST_CHECK', String(now));
+  for (var i = 0; i < messages.length; i++) {
+    if (Date.now() - started > TIME_BUDGET_MS) {
+      console.log('Time budget reached; ' + (messages.length - i) + ' message(s) left for the next run');
+      return;
+    }
+    var msg = messages[i];
+    var t0 = Date.now();
+    var task = extractTask(msg, apiKey);
+    if (task) saveTask(msg, task, token);
+    console.log((task ? 'task' : 'not a task') + ' in ' + (Date.now() - t0) + ' ms');
+    // Saved after each message: if a later one fails, the next run resumes here.
+    props.setProperty('LAST_MESSAGE_MS', String(msg.getDate().getTime()));
+  }
 }
 
 function extractTask(msg, apiKey) {
@@ -80,13 +96,28 @@ function extractTask(msg, apiKey) {
       payload: JSON.stringify({
         systemInstruction: { parts: [{ text: PROMPT }] },
         contents: [{ role: 'user', parts: [{ text: email }] }],
-        generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA, temperature: 0 }
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: SCHEMA,
+          maxOutputTokens: MAX_OUTPUT_TOKENS
+        }
       })
     });
   if (res.getResponseCode() !== 200) {
     throw new Error('Gemini ' + res.getResponseCode() + ': ' + res.getContentText().slice(0, 300));
   }
-  var out = JSON.parse(JSON.parse(res.getContentText()).candidates[0].content.parts[0].text);
+  var candidate = JSON.parse(res.getContentText()).candidates[0];
+  if (candidate.finishReason !== 'STOP') {
+    // A cut-off or blocked answer is treated as "not a task" rather than failing
+    // every run on the same email.
+    console.log('Gemini did not finish (' + candidate.finishReason + '); skipped');
+    return null;
+  }
+  var text = candidate.content.parts
+    .filter(function(p) { return p.text && !p.thought; })
+    .map(function(p) { return p.text; })
+    .join('');
+  var out = JSON.parse(text);
   return out.is_task && out.title ? out : null;
 }
 

@@ -18,7 +18,7 @@ https://github.com/kesslernir-code/kessler-time
 ```
   browser / installed PWA                     Google Apps Script (every 15 min)
           |                                    - new Primary-inbox Gmail messages
-          v                                    - Gemini 2.5 Flash-Lite: is it a task?
+          v                                    - Gemini 3.5 Flash-Lite: is it a task?
   index.html  (GitHub Pages)                            |
    - Google sign-in (Supabase Auth)                     |  rpc/add_gmail_task
    - projects sidebar, task list, edit modal            |  (token, insert-only)
@@ -62,12 +62,15 @@ schema is not exposed through the API.
 
 ## Gmail import
 
-- Searches `in:inbox category:primary after:<last check>`, up to 50 threads a run.
+- Searches `in:inbox category:primary` after the last processed message, up to
+  50 threads a run, and handles messages oldest first.
 - Each message (subject, sender, first 6,000 characters of the body) goes to
-  Gemini with a JSON schema; only messages judged to be tasks are saved.
-- Duplicates are ignored by the unique `gmail_message_id`. A failed run does not
-  advance the checkpoint, so it retries next time; Apps Script emails the owner
-  when a trigger fails.
+  Gemini with a JSON schema and a 1,024-token output cap; only messages judged to
+  be tasks are saved. An answer that does not finish counts as "not a task".
+- The checkpoint (`LAST_MESSAGE_MS`) advances after every message, and a run
+  stops itself after 4.5 minutes, so a slow run resumes instead of repeating.
+- Duplicates are ignored by the unique `gmail_message_id`. Apps Script emails
+  the owner when a trigger fails.
 - Needs a **paid-tier** Gemini API key: on the free tier Google may use and
   human-review the content, and its terms say not to send personal information.
 
@@ -78,7 +81,7 @@ schema is not exposed through the API.
 | GitHub Pages | free |
 | Supabase | free plan (the 15-minute script also keeps the project from pausing for inactivity) |
 | Google Apps Script | free (consumer quotas: 20,000 URL fetches/day, 90 min trigger runtime/day) |
-| Gemini 2.5 Flash-Lite | paid tier, ~$0.0002 per email at ~1,500 input tokens — roughly $0.60/month at 100 emails/day |
+| Gemini 3.5 Flash-Lite | paid tier, ~$0.0007 per email at ~1,500 input tokens — roughly $2/month at 100 emails/day (2.5 Flash-Lite is closed to new users) |
 
 ## Running it locally
 
