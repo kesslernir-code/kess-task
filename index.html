@@ -8,8 +8,9 @@
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="Tasks"/>
-  <link rel="manifest" href="/manifest.json"/>
-  <link rel="apple-touch-icon" href="/icon.svg"/>
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="apple-touch-icon" href="icon.svg"/>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.106.2/dist/umd/supabase.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@200;300;400&display=swap" rel="stylesheet"/>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -85,6 +86,11 @@
     .tag.project { color:var(--accent); border-color:rgba(200,255,0,0.2); }
     .tag.cal { color:#4285f4; border-color:rgba(66,133,244,0.3); cursor:pointer; display:inline-flex; align-items:center; gap:3px; background:none; font-family:inherit; }
     .tag.cal:hover { background:rgba(66,133,244,0.1); }
+    .tag.gmail { color:#ea4335; border-color:rgba(234,67,53,0.3); text-decoration:none; }
+    .signout-btn { margin-inline-start:auto; }
+    .login-screen { display:none; text-align:center; padding:80px 0; }
+    body.signed-out .login-screen { display:block; }
+    body.signed-out .app, body.signed-out .signout-btn { display:none; }
     .task-actions { flex-shrink:0; display:flex; flex-direction:column; gap:4px; }
     .icon-btn { background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:13px; padding:3px; border-radius:4px; transition:color 0.15s; line-height:1; }
     .icon-btn:hover { color:var(--red); }
@@ -130,7 +136,12 @@
       <div class="header-label">kessler task</div>
       <h1>המשימות <span>שלי</span></h1>
     </div>
+    <button class="btn-ghost signout-btn" onclick="signOut()">התנתק</button>
   </header>
+
+  <div class="login-screen">
+    <button class="btn" onclick="signIn()">התחבר עם Google</button>
+  </div>
 
   <div class="app">
     <aside class="sidebar">
@@ -236,6 +247,12 @@
     var tasks=[], projects=[], filter='all', currentProject='all';
     var _calUrl=null, toastTimer=null;
     var editingId=null;
+    var sb=supabase.createClient('https://qmbdtswkeaayvsufphav.supabase.co','sb_publishable_VSAG1svbd57fNRlQ1r_r5A_cEPgU2nM');
+    var loaded=false;
+
+    function must(r) { if (r.error) throw new Error(r.error.message); return r.data; }
+    function signIn() { sb.auth.signInWithOAuth({provider:'google', options:{redirectTo:location.origin+location.pathname}}); }
+    async function signOut() { await sb.auth.signOut(); }
 
     function gcalUrl(title, date, desc) {
       var d = date.replace(/-/g,'');
@@ -285,10 +302,11 @@
 
     async function load() {
       try {
-        var [pRes,tRes]=await Promise.all([fetch('/api/projects'),fetch('/api/tasks')]);
-        projects=await pRes.json(); tasks=await tRes.json();
-        if(!Array.isArray(projects)) projects=[];
-        if(!Array.isArray(tasks)) tasks=[];
+        var [pRes,tRes]=await Promise.all([
+          sb.from('projects').select('*').order('created_at',{ascending:true}),
+          sb.from('tasks').select('*').order('created_at',{ascending:false})
+        ]);
+        projects=must(pRes); tasks=must(tRes);
         renderSidebar(); render();
       } catch(e) { document.getElementById('taskList').innerHTML='<div class="empty">לא ניתן לטעון משימות</div>'; }
     }
@@ -324,9 +342,9 @@
     }
     async function loadTasks(){
       try{
-        var url='/api/tasks'+(currentProject!=='all'?'?project_id='+currentProject:'');
-        var res=await fetch(url); tasks=await res.json();
-        if(!Array.isArray(tasks)) tasks=[]; render();
+        var q=sb.from('tasks').select('*').order('created_at',{ascending:false});
+        if(currentProject!=='all') q=q.eq('project_id',currentProject);
+        tasks=must(await q); render();
       }catch(e){toast('שגיאה בטעינת משימות');}
     }
     function openAddProject(){
@@ -342,9 +360,7 @@
       var name=document.getElementById('projNameInput').value.trim();
       if(!name){toast('הכנס שם פרויקט');return;}
       try{
-        var res=await fetch('/api/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})});
-        var proj=await res.json();
-        if(proj.error) throw new Error(proj.error);
+        var proj=must(await sb.from('projects').insert([{name:name}]).select().single());
         projects.push(proj);
         document.getElementById('modalOverlay').classList.remove('open');
         document.getElementById('projNameInput').value='';
@@ -357,7 +373,7 @@
     async function deleteProject(id){
       if(!confirm('למחוק פרויקט זה?')) return;
       try{
-        await fetch('/api/projects/'+id,{method:'DELETE'});
+        must(await sb.from('projects').delete().eq('id',id));
         projects=projects.filter(function(p){return p.id!==id;});
         if(currentProject===id) currentProject='all';
         renderSidebar(); loadTasks(); toast('פרויקט נמחק');
@@ -402,9 +418,7 @@
         project_id: document.getElementById('editProjectInput').value || null
       };
       try {
-        var res = await fetch('/api/tasks/'+editingId, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(updates)});
-        var updated = await res.json();
-        if (updated.error) throw new Error(updated.error);
+        var updated = must(await sb.from('tasks').update(updates).eq('id',editingId).select().single());
         tasks = tasks.map(function(t){return t.id===editingId?updated:t;});
         document.getElementById('editModalOverlay').classList.remove('open');
         editingId = null;
@@ -456,7 +470,7 @@
         var isDone=t.status==='done', od=overdue(t);
         var pname=currentProject==='all'?projectName(t.project_id):null;
         var dateStr=t.due_date?t.due_date.split('T')[0]:null;
-        h+='<div class="task-item'+(isDone?' done':'')+"'>";
+        h+='<div class="task-item'+(isDone?' done':'')+'">';
         h+='<div class="task-actions">';
         h+='<button class="icon-btn" onclick="del(\''+t.id+'\')" title="מחק">✕</button>';
         h+='<button class="icon-btn edit" onclick="openEditTask(\''+t.id+'\')" title="ערוך">✎</button>';
@@ -470,11 +484,12 @@
           h+='<span class="tag '+(od?'overdue':'due')+'">'+(od?'באיחור · ':'')+fmtDate(dateStr)+'</span>';
           if(!isDone){
             var cu=gcalUrl(t.title,dateStr,t.description);
-            h+='<button class="tag cal" onclick="openCalTag(\''+cu.replace(/'/g,"%27")+'\'">📆 יומן</button>';
+            h+='<button class="tag cal" onclick="openCalTag(\''+cu.replace(/'/g,"%27")+'\')">📆 יומן</button>';
           }
         }
         if(pname) h+='<span class="tag project">'+esc(pname)+'</span>';
-        h+='</div></div><div class="checkbox'+(isDone?' checked':'')+"' onclick=\"toggle('"+t.id+"',"+isDone+")\"></div></div>";
+        if(t.gmail_link&&t.gmail_link.indexOf('https://mail.google.com/')===0) h+='<a class="tag gmail" href="'+esc(t.gmail_link)+'" target="_blank" rel="noopener">✉ Gmail</a>';
+        h+='</div></div><div class="checkbox'+(isDone?' checked':'')+'" onclick="toggle(\''+t.id+'\','+isDone+')"></div></div>';
       });
       return h+'</div>';
     }
@@ -485,9 +500,7 @@
       var desc=document.getElementById('descInput').value.trim()||null;
       var payload={title:title,description:desc,priority:document.getElementById('priorityInput').value,due_date:dueDate||null,project_id:currentProject!=='all'?currentProject:null};
       try{
-        var res=await fetch('/api/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-        var task=await res.json();
-        if(task.error) throw new Error(task.error);
+        var task=must(await sb.from('tasks').insert([payload]).select().single());
         tasks.unshift(task);
         document.getElementById('titleInput').value='';
         document.getElementById('descInput').value='';
@@ -500,14 +513,13 @@
     }
     async function toggle(id,wasDone){
       try{
-        var res=await fetch('/api/tasks/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:wasDone?'todo':'done'})});
-        var updated=await res.json();
+        var updated=must(await sb.from('tasks').update({status:wasDone?'todo':'done'}).eq('id',id).select().single());
         tasks=tasks.map(function(t){return t.id===id?updated:t;}); render();
       }catch(e){toast('שגיאה');}
     }
     async function del(id){
       try{
-        await fetch('/api/tasks/'+id,{method:'DELETE'});
+        must(await sb.from('tasks').delete().eq('id',id));
         tasks=tasks.filter(function(t){return t.id!==id;}); render(); toast('נמחק');
       }catch(e){toast('שגיאה');}
     }
@@ -520,7 +532,11 @@
       if(e.key==='Enter')saveEdit();
       if(e.key==='Escape')closeEditTask();
     });
-    load();
+    sb.auth.onAuthStateChange(function(event, session) {
+      document.body.classList.toggle('signed-out', !session);
+      if (!session) { loaded=false; tasks=[]; projects=[]; return; }
+      if (!loaded) { loaded=true; setTimeout(load, 0); }
+    });
   </script>
 </body>
 </html>
