@@ -64,9 +64,14 @@ schema is not exposed through the API.
 
 - Searches `in:inbox category:primary` after the last processed message, up to
   50 threads a run, and handles messages oldest first.
-- Each message (subject, sender, first 6,000 characters of the body) goes to
-  Gemini with a JSON schema and a 1,024-token output cap; only messages judged to
-  be tasks are saved. An answer that does not finish counts as "not a task".
+- Messages from automated senders (no-reply, notification, alert, bounce
+  addresses) or carrying a `List-Unsubscribe` header are skipped without calling
+  Gemini.
+- Every other message (subject, sender, first 6,000 characters of the body) goes
+  to Gemini with a JSON schema and a 300-token output cap; only messages judged
+  to be tasks are saved. An answer that does not finish, or whose title runs past
+  80 characters, counts as "not a task" — Gemini 3.5 Flash-Lite sometimes loops
+  inside the title string.
 - The checkpoint (`LAST_MESSAGE_MS`) advances after every message, and a run
   stops itself after 4.5 minutes, so a slow run resumes instead of repeating.
 - Duplicates are ignored by the unique `gmail_message_id`. Apps Script emails
