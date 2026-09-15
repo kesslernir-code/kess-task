@@ -58,8 +58,12 @@ from before their headlines and details were regenerated on 2026-09-15.
 
 ## The app
 
-- Each task is a card showing its headline and tags (priority, due date, category,
-  Gmail, 📝 when it has details). Clicking the card opens a details window with the
+- Light design modeled on a PIXTA task-dashboard mockup: white rounded cards on
+  lavender, blue-to-violet gradient accents, Rubik font.
+- Each task is a card showing a fantasy icon, its headline and tags (priority, due
+  date, category, Gmail, 📝 when it has details). The icon comes from keywords in the
+  headline and details (`FANTASY_ICONS` in `index.html`: 🐉 payment, 🏰 meeting,
+  📜 document, 🦉 message…; ✨ when nothing matches). Clicking the card opens a details window with the
   details, the tags, and an edit button.
 - **Record a task** (🎤 in the add form): records up to 2 minutes with
   `MediaRecorder`, sends the audio and the signed-in session's access token to the
