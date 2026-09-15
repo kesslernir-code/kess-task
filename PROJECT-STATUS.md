@@ -65,6 +65,8 @@ from before their headlines and details were regenerated on 2026-09-15.
   headline and details (`FANTASY_ICONS` in `index.html`: 🐉 payment, 🏰 meeting,
   📜 document, 🦉 message…; ✨ when nothing matches). Clicking the card opens a details window with the
   details, the tags, and an edit button.
+- **📆 הוסף ליומן** (checkbox in the add form): after the task is saved, opens a
+  prefilled Google Calendar event for its due date. Needs a due date.
 - **Record a task** (🎤 in the add form): records up to 2 minutes with
   `MediaRecorder`, sends the audio and the signed-in session's access token to the
   web app's `splitRecording`, and fills the headline, details and due date into the

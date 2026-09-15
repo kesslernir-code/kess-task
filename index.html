@@ -58,6 +58,8 @@
     .date-wrap { position:relative; flex-shrink:0; }
     .date-wrap input[type="date"] { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; z-index:2; color-scheme:light; }
     .date-display { background:var(--surface2); border:1px solid transparent; border-radius:10px; color:var(--text-muted); font-size:13px; padding:10px 14px; white-space:nowrap; display:flex; align-items:center; gap:6px; min-width:140px; user-select:none; cursor:pointer; }
+    .cal-check { display:flex; align-items:center; gap:6px; flex-shrink:0; font-size:13px; color:var(--text-secondary); cursor:pointer; white-space:nowrap; user-select:none; }
+    .cal-check input { width:16px; height:16px; padding:0; accent-color:var(--accent); cursor:pointer; }
     .date-display.has-date { background:#eef0ff; color:var(--accent); border-color:var(--border-hover); }
     .btn { background:var(--grad); border:none; border-radius:10px; box-shadow:0 4px 12px rgba(91,108,255,0.3); color:#fff; cursor:pointer; font-family:inherit; font-size:14px; font-weight:500; padding:10px 20px; transition:opacity 0.15s, transform 0.15s; white-space:nowrap; }
     .btn:hover { opacity:0.92; transform:translateY(-1px); }
@@ -121,10 +123,6 @@
     .modal-row { display:flex; gap:8px; }
     .toast { position:fixed; bottom:24px; left:24px; background:var(--surface); border-radius:14px; box-shadow:0 12px 36px rgba(31,37,68,0.18); color:var(--text-primary); font-size:14px; padding:14px 16px; opacity:0; pointer-events:none; transform:translateY(8px); transition:all 0.2s; z-index:100; min-width:200px; }
     .toast.show { opacity:1; pointer-events:auto; transform:translateY(0); }
-    .toast-action { display:none; margin-top:10px; padding-top:10px; border-top:1px solid var(--border); }
-    .toast-action.visible { display:block; }
-    .toast-cal-btn { display:flex; align-items:center; justify-content:center; gap:6px; background:var(--grad); color:#fff; border:none; border-radius:10px; font-size:14px; padding:10px 14px; cursor:pointer; width:100%; font-family:inherit; }
-    .toast-cal-btn:hover { opacity:0.92; }
     .loading { color:var(--text-muted); font-size:14px; padding:20px 0; }
     @media (max-width:620px) {
       .app { flex-direction:column; }
@@ -184,6 +182,7 @@
             </div>
             <input id="dueDateInput" type="date" onchange="onDateChange(this)"/>
           </div>
+          <label class="cal-check"><input id="calInput" type="checkbox"/>📆 הוסף ליומן</label>
           <button class="btn" onclick="addTask()">הוסף</button>
         </div>
       </div>
@@ -262,14 +261,11 @@
 
   <div class="toast" id="toast">
     <div id="toastMsg"></div>
-    <div class="toast-action" id="toastAction">
-      <button class="toast-cal-btn" onclick="goToCalendar()">📆 הוסף ליומן Google</button>
-    </div>
   </div>
 
   <script>
     var tasks=[], projects=[], filter='all', currentProject='all';
-    var _calUrl=null, toastTimer=null;
+    var toastTimer=null;
     var editingId=null, detailId=null, renamingProjectId=null;
     var sb=supabase.createClient('https://qmbdtswkeaayvsufphav.supabase.co','sb_publishable_VSAG1svbd57fNRlQ1r_r5A_cEPgU2nM');
     var loaded=false;
@@ -290,7 +286,6 @@
         +(desc?'&details='+encodeURIComponent(desc):'');
     }
 
-    function goToCalendar() { if (_calUrl) location.href = _calUrl; }
     function openCalTag(url) { location.href = url; }
 
     function onDateChange(input) {
@@ -317,15 +312,12 @@
       }
     }
 
-    function toast(msg, calUrl) {
+    function toast(msg) {
       if (toastTimer) clearTimeout(toastTimer);
-      _calUrl = calUrl || null;
       document.getElementById('toastMsg').textContent = msg;
-      var action = document.getElementById('toastAction');
-      action.className = 'toast-action' + (calUrl ? ' visible' : '');
       var el = document.getElementById('toast');
       el.classList.add('show');
-      toastTimer = setTimeout(function(){el.classList.remove('show');}, calUrl?8000:2400);
+      toastTimer = setTimeout(function(){el.classList.remove('show');}, 2400);
     }
 
     async function load() {
@@ -661,6 +653,8 @@
       if(!title){toast('הכנס כותרת משימה');return;}
       var dueDate=document.getElementById('dueDateInput').value;
       var desc=document.getElementById('descInput').value.trim()||null;
+      var cal=document.getElementById('calInput').checked;
+      if(cal&&!dueDate){toast('בחר תאריך יעד כדי להוסיף ליומן');return;}
       var payload={title:title,description:desc,priority:document.getElementById('priorityInput').value,due_date:dueDate||null,project_id:currentProject!=='all'?currentProject:null};
       try{
         var task=must(await sb.from('tasks').insert([payload]).select().single());
@@ -671,7 +665,9 @@
         document.getElementById('priorityInput').value='normal';
         onDateChange(document.getElementById('dueDateInput'));
         render();
-        toast('משימה נוספה', dueDate?gcalUrl(title,dueDate,desc):null);
+        document.getElementById('calInput').checked=false;
+        toast('משימה נוספה');
+        if(cal) location.href=gcalUrl(title,dueDate,desc);
       }catch(e){toast('שגיאה: '+e.message);}
     }
     async function toggle(id,wasDone){
