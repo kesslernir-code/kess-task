@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Kessler Task</title>
+  <title>Kess-task</title>
   <meta name="theme-color" content="#0a0a0a"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-  <meta name="apple-mobile-web-app-title" content="Tasks"/>
+  <meta name="apple-mobile-web-app-title" content="Kess-task"/>
   <link rel="manifest" href="manifest.json"/>
   <link rel="apple-touch-icon" href="icon.svg"/>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.106.2/dist/umd/supabase.min.js"></script>
@@ -38,8 +38,9 @@
     .proj-item.active { background:var(--surface); color:var(--accent); }
     .proj-item-name { flex:1; text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .proj-del { display:none; color:var(--text-muted); font-size:10px; flex-shrink:0; background:none; border:none; cursor:pointer; padding:0 2px; line-height:1; }
-    .proj-item:hover .proj-del { display:block; }
+    .proj-item:hover .proj-del, .proj-item.active .proj-del { display:block; }
     .proj-del:hover { color:var(--red)!important; }
+    .proj-edit:hover { color:var(--accent)!important; }
     .main { flex:1; min-width:0; }
     .add-form { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:18px; margin-bottom:24px; }
     .form-row { display:flex; gap:10px; margin-bottom:10px; }
@@ -59,6 +60,10 @@
     .btn:hover { opacity:0.85; }
     .btn-ghost { background:transparent; border:1px solid var(--border); border-radius:6px; color:var(--text-secondary); cursor:pointer; font-size:13px; padding:9px 14px; transition:all 0.15s; white-space:nowrap; }
     .btn-ghost:hover { border-color:var(--border-hover); color:var(--text-primary); }
+    .btn-rec { display:inline-flex; align-items:center; justify-content:center; gap:6px; }
+    .btn-rec.recording { border-color:var(--red); color:var(--red); animation:recpulse 1.2s ease-in-out infinite; }
+    .btn-rec:disabled { opacity:0.5; cursor:wait; }
+    @keyframes recpulse { 50% { background:rgba(255,77,77,0.12); } }
     .filters { display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap; }
     .filter-btn { background:transparent; border:1px solid var(--border); border-radius:20px; color:var(--text-secondary); cursor:pointer; font-size:12px; padding:5px 13px; transition:all 0.15s; }
     .filter-btn:hover { border-color:var(--border-hover); color:var(--text-primary); }
@@ -73,10 +78,15 @@
     .checkbox:hover { border-color:var(--accent); }
     .checkbox.checked { background:var(--accent); border-color:var(--accent); }
     .checkbox.checked::after { content:''; width:9px; height:5px; border-left:2px solid #000; border-bottom:2px solid #000; transform:rotate(-45deg) translateY(-1px); }
-    .task-body { flex:1; min-width:0; }
+    .task-body { flex:1; min-width:0; cursor:pointer; }
     .task-title { font-size:14px; font-weight:400; color:var(--text-primary); line-height:1.4; }
     .task-item.done .task-title { text-decoration:line-through; color:var(--text-secondary); }
-    .task-desc { font-size:12px; color:var(--text-secondary); margin-top:3px; line-height:1.5; }
+    .tag.more { color:var(--text-secondary); border-color:var(--border); }
+    .detail-modal { width:460px; }
+    .detail-title { font-size:18px; font-weight:400; line-height:1.4; margin-bottom:12px; }
+    .detail-desc { font-size:14px; color:var(--text-secondary); line-height:1.6; white-space:pre-wrap; margin-bottom:14px; }
+    .detail-desc.empty-desc { color:var(--text-muted); }
+    .detail-modal .task-meta { margin:0 0 18px; }
     .task-meta { display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; align-items:center; }
     .tag { font-size:10px; padding:2px 7px; border-radius:10px; border:1px solid; }
     .tag.high { color:var(--red); border-color:rgba(255,77,77,0.3); }
@@ -128,12 +138,12 @@
     <svg class="logo" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
       <rect width="512" height="512" rx="100" fill="#0a0a0a"/>
       <rect x="40" y="40" width="432" height="432" rx="72" fill="#111111"/>
-      <text x="256" y="200" text-anchor="middle" font-family="sans-serif" font-size="80" font-weight="300" fill="#888">kessler</text>
+      <text x="256" y="200" text-anchor="middle" font-family="sans-serif" font-size="80" font-weight="300" fill="#888">kess</text>
       <text x="256" y="290" text-anchor="middle" font-family="sans-serif" font-size="80" font-weight="700" fill="#c8ff00">task</text>
       <polyline points="156,360 220,424 356,300" fill="none" stroke="#c8ff00" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
     <div>
-      <div class="header-label">kessler task</div>
+      <div class="header-label">kess-task</div>
       <h1>המשימות <span>שלי</span></h1>
     </div>
     <button class="btn-ghost signout-btn" onclick="signOut()">התנתק</button>
@@ -155,10 +165,11 @@
     <div class="main">
       <div class="add-form">
         <div class="form-row">
-          <input id="titleInput" class="title-input" type="text" placeholder="משימה חדשה..." autocomplete="off"/>
+          <input id="titleInput" class="title-input" type="text" placeholder="כותרת המשימה..." autocomplete="off"/>
+          <button class="btn-ghost btn-rec" id="recBtn" onclick="toggleRecording()" title="הקלט משימה">🎤 הקלט</button>
         </div>
         <div class="form-row">
-          <textarea id="descInput" placeholder="הערות (אופציונלי)"></textarea>
+          <textarea id="descInput" placeholder="פרטים (אופציונלי)"></textarea>
         </div>
         <div class="form-row">
           <select id="priorityInput">
@@ -191,10 +202,10 @@
   <!-- Add Project Modal -->
   <div class="modal-overlay" id="modalOverlay" onclick="closeAddProject(event)">
     <div class="modal">
-      <h2>פרויקט חדש</h2>
+      <h2 id="projModalTitle">פרויקט חדש</h2>
       <div class="modal-row">
         <input id="projNameInput" type="text" placeholder="שם פרויקט..." autocomplete="off"/>
-        <button class="btn" onclick="addProject()">הוסף</button>
+        <button class="btn" id="projSaveBtn" onclick="addProject()">הוסף</button>
         <button class="btn-ghost" onclick="closeAddProject()">ביטול</button>
       </div>
     </div>
@@ -208,7 +219,7 @@
         <input id="editTitleInput" type="text" placeholder="כותרת..." autocomplete="off"/>
       </div>
       <div class="form-row">
-        <textarea id="editDescInput" placeholder="הערות (אופציונלי)"></textarea>
+        <textarea id="editDescInput" placeholder="פרטים (אופציונלי)"></textarea>
       </div>
       <div class="form-row">
         <select id="editPriorityInput">
@@ -236,6 +247,19 @@
     </div>
   </div>
 
+  <!-- Task Details Modal -->
+  <div class="modal-overlay" id="detailOverlay" onclick="closeDetail(event)">
+    <div class="modal detail-modal">
+      <div class="detail-title" id="detailTitle"></div>
+      <div class="detail-desc" id="detailDesc"></div>
+      <div class="task-meta" id="detailMeta"></div>
+      <div class="modal-row">
+        <button class="btn" onclick="editFromDetail()">ערוך</button>
+        <button class="btn-ghost" onclick="closeDetail()">סגור</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast" id="toast">
     <div id="toastMsg"></div>
     <div class="toast-action" id="toastAction">
@@ -246,9 +270,13 @@
   <script>
     var tasks=[], projects=[], filter='all', currentProject='all';
     var _calUrl=null, toastTimer=null;
-    var editingId=null;
+    var editingId=null, detailId=null, renamingProjectId=null;
     var sb=supabase.createClient('https://qmbdtswkeaayvsufphav.supabase.co','sb_publishable_VSAG1svbd57fNRlQ1r_r5A_cEPgU2nM');
     var loaded=false;
+    // Apps Script web app: turns a voice memo into headline, details and due date.
+    var SCRIPT_URL='https://script.google.com/macros/s/AKfycbza0DRcMq4tm4bfG9DznuBfXq2IuPXg4rdLb299PDS_a92VqCzNzrjzme2U40H4ort0Dw/exec';
+    var MAX_RECORDING_MS=120000;
+    var recorder=null, recTimer=null;
 
     function must(r) { if (r.error) throw new Error(r.error.message); return r.data; }
     function signIn() { sb.auth.signInWithOAuth({provider:'google', options:{redirectTo:location.origin+location.pathname}}); }
@@ -327,9 +355,12 @@
         var del=document.createElement('button');
         del.className='proj-del'; del.textContent='✕';
         del.onclick=function(e){e.stopPropagation();deleteProject(p.id);};
+        var edit=document.createElement('button');
+        edit.className='proj-del proj-edit'; edit.textContent='✎'; edit.title='שנה שם';
+        edit.onclick=function(e){e.stopPropagation();openRenameProject(p.id);};
         var name=document.createElement('span');
         name.className='proj-item-name'; name.textContent=p.name;
-        btn.appendChild(del); btn.appendChild(name);
+        btn.appendChild(del); btn.appendChild(edit); btn.appendChild(name);
         btn.onclick=function(){selectProject(p.id,btn);};
         list.appendChild(btn);
       });
@@ -347,18 +378,33 @@
         tasks=must(await q); render();
       }catch(e){toast('שגיאה בטעינת משימות');}
     }
-    function openAddProject(){
+    function openProjectModal(title,saveLabel,value){
+      document.getElementById('projModalTitle').textContent=title;
+      document.getElementById('projSaveBtn').textContent=saveLabel;
+      document.getElementById('projNameInput').value=value;
       document.getElementById('modalOverlay').classList.add('open');
       setTimeout(function(){document.getElementById('projNameInput').focus();},50);
+    }
+    function openAddProject(){
+      renamingProjectId=null;
+      openProjectModal('פרויקט חדש','הוסף','');
+    }
+    function openRenameProject(id){
+      var p=projects.find(function(x){return x.id===id;});
+      if(!p) return;
+      renamingProjectId=id;
+      openProjectModal('שינוי שם פרויקט','שמור',p.name);
     }
     function closeAddProject(e){
       if(e&&e.target!==document.getElementById('modalOverlay')) return;
       document.getElementById('modalOverlay').classList.remove('open');
       document.getElementById('projNameInput').value='';
+      renamingProjectId=null;
     }
     async function addProject(){
       var name=document.getElementById('projNameInput').value.trim();
       if(!name){toast('הכנס שם פרויקט');return;}
+      if(renamingProjectId){ await renameProject(renamingProjectId,name); return; }
       try{
         var proj=must(await sb.from('projects').insert([{name:name}]).select().single());
         projects.push(proj);
@@ -368,6 +414,15 @@
         var newBtn=document.querySelector('[data-id="'+proj.id+'"]');
         if(newBtn) selectProject(proj.id,newBtn);
         toast('פרויקט נוצר');
+      }catch(e){toast('שגיאה: '+e.message);}
+    }
+    async function renameProject(id,name){
+      try{
+        var updated=must(await sb.from('projects').update({name:name}).eq('id',id).select().single());
+        projects=projects.map(function(p){return p.id===id?updated:p;});
+        closeAddProject();
+        renderSidebar(); render();
+        toast('שם הפרויקט עודכן');
       }catch(e){toast('שגיאה: '+e.message);}
     }
     async function deleteProject(id){
@@ -464,34 +519,120 @@
       else{if(active.length)html+=group('ממתין',active);if(done.length)html+=group('הושלם',done);}
       document.getElementById('taskList').innerHTML=html;
     }
+    // Tags shared by a task's card and its details window. Clicks on the calendar
+    // and Gmail tags stay theirs instead of also opening the details window.
+    function metaHtml(t,showProject){
+      var h='';
+      var isDone=t.status==='done', od=overdue(t);
+      var dateStr=t.due_date?t.due_date.split('T')[0]:null;
+      var pname=showProject?projectName(t.project_id):null;
+      if(t.priority==='high') h+='<span class="tag high">גבוהה</span>';
+      if(t.priority==='low') h+='<span class="tag low">נמוכה</span>';
+      if(dateStr){
+        h+='<span class="tag '+(od?'overdue':'due')+'">'+(od?'באיחור · ':'')+fmtDate(dateStr)+'</span>';
+        if(!isDone){
+          var cu=gcalUrl(t.title,dateStr,t.description);
+          h+='<button class="tag cal" onclick="event.stopPropagation();openCalTag(\''+cu.replace(/'/g,"%27")+'\')">📆 יומן</button>';
+        }
+      }
+      if(pname) h+='<span class="tag project">'+esc(pname)+'</span>';
+      if(t.gmail_link&&t.gmail_link.indexOf('https://mail.google.com/')===0) h+='<a class="tag gmail" href="'+esc(t.gmail_link)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">✉ Gmail</a>';
+      return h;
+    }
     function group(label,items){
       var h='<div class="task-group"><div class="section-label">'+label+' <span class="count">'+items.length+'</span></div>';
       items.forEach(function(t){
-        var isDone=t.status==='done', od=overdue(t);
-        var pname=currentProject==='all'?projectName(t.project_id):null;
-        var dateStr=t.due_date?t.due_date.split('T')[0]:null;
+        var isDone=t.status==='done';
         h+='<div class="task-item'+(isDone?' done':'')+'">';
         h+='<div class="task-actions">';
         h+='<button class="icon-btn" onclick="del(\''+t.id+'\')" title="מחק">✕</button>';
         h+='<button class="icon-btn edit" onclick="openEditTask(\''+t.id+'\')" title="ערוך">✎</button>';
         h+='</div>';
-        h+='<div class="task-body"><div class="task-title">'+esc(t.title)+'</div>';
-        if(t.description) h+='<div class="task-desc">'+esc(t.description)+'</div>';
+        h+='<div class="task-body" onclick="openDetail(\''+t.id+'\')"><div class="task-title">'+esc(t.title)+'</div>';
         h+='<div class="task-meta">';
-        if(t.priority==='high') h+='<span class="tag high">גבוהה</span>';
-        if(t.priority==='low') h+='<span class="tag low">נמוכה</span>';
-        if(dateStr){
-          h+='<span class="tag '+(od?'overdue':'due')+'">'+(od?'באיחור · ':'')+fmtDate(dateStr)+'</span>';
-          if(!isDone){
-            var cu=gcalUrl(t.title,dateStr,t.description);
-            h+='<button class="tag cal" onclick="openCalTag(\''+cu.replace(/'/g,"%27")+'\')">📆 יומן</button>';
-          }
-        }
-        if(pname) h+='<span class="tag project">'+esc(pname)+'</span>';
-        if(t.gmail_link&&t.gmail_link.indexOf('https://mail.google.com/')===0) h+='<a class="tag gmail" href="'+esc(t.gmail_link)+'" target="_blank" rel="noopener">✉ Gmail</a>';
+        if(t.description) h+='<span class="tag more">📝 פרטים</span>';
+        h+=metaHtml(t,currentProject==='all');
         h+='</div></div><div class="checkbox'+(isDone?' checked':'')+'" onclick="toggle(\''+t.id+'\','+isDone+')"></div></div>';
       });
       return h+'</div>';
+    }
+    function openDetail(id){
+      var t=tasks.find(function(x){return x.id===id;});
+      if(!t) return;
+      detailId=id;
+      document.getElementById('detailTitle').textContent=t.title;
+      var desc=document.getElementById('detailDesc');
+      desc.textContent=t.description||'אין פרטים';
+      desc.classList.toggle('empty-desc',!t.description);
+      document.getElementById('detailMeta').innerHTML=metaHtml(t,true);
+      document.getElementById('detailOverlay').classList.add('open');
+    }
+    function closeDetail(e){
+      if(e&&e.target!==document.getElementById('detailOverlay')) return;
+      document.getElementById('detailOverlay').classList.remove('open');
+      detailId=null;
+    }
+    function editFromDetail(){
+      var id=detailId;
+      closeDetail();
+      if(id) openEditTask(id);
+    }
+
+    // ---- Voice memo -> headline, details, due date (filled into the form to review) ----
+    function setRecState(state){
+      var b=document.getElementById('recBtn');
+      b.classList.toggle('recording',state==='recording');
+      b.disabled=state==='busy';
+      b.textContent=state==='recording'?'⏹ עצור':state==='busy'?'⏳ מעבד...':'🎤 הקלט';
+    }
+    async function toggleRecording(){
+      if(recorder&&recorder.state==='recording'){ recorder.stop(); return; }
+      if(!navigator.mediaDevices||!window.MediaRecorder){ toast('הדפדפן לא תומך בהקלטה'); return; }
+      var stream;
+      try{ stream=await navigator.mediaDevices.getUserMedia({audio:true}); }
+      catch(e){ toast('אין גישה למיקרופון'); return; }
+      var chunks=[];
+      recorder=new MediaRecorder(stream);
+      recorder.ondataavailable=function(e){ if(e.data&&e.data.size) chunks.push(e.data); };
+      recorder.onstop=function(){
+        clearTimeout(recTimer);
+        stream.getTracks().forEach(function(tr){ tr.stop(); });
+        var type=(recorder.mimeType||'audio/webm').split(';')[0];
+        sendRecording(new Blob(chunks,{type:type}));
+      };
+      recorder.start();
+      setRecState('recording');
+      recTimer=setTimeout(function(){ if(recorder&&recorder.state==='recording') recorder.stop(); },MAX_RECORDING_MS);
+    }
+    function blobToBase64(blob){
+      return new Promise(function(resolve,reject){
+        var r=new FileReader();
+        r.onload=function(){ resolve(String(r.result).split(',')[1]||''); };
+        r.onerror=reject;
+        r.readAsDataURL(blob);
+      });
+    }
+    async function sendRecording(blob){
+      setRecState('busy');
+      try{
+        if(!blob.size) throw new Error('ההקלטה ריקה');
+        var session=(await sb.auth.getSession()).data.session;
+        if(!session) throw new Error('יש להתחבר מחדש');
+        var res=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({
+          action:'splitRecording', accessToken:session.access_token, mimeType:blob.type, audio:await blobToBase64(blob)
+        })});
+        var out=await res.json();
+        if(!out.ok) throw new Error(out.error||'שגיאה');
+        var r=out.result;
+        document.getElementById('titleInput').value=r.title||'';
+        document.getElementById('descInput').value=r.description||'';
+        var dateInput=document.getElementById('dueDateInput');
+        dateInput.value=r.due_date||'';
+        onDateChange(dateInput);
+        document.getElementById('titleInput').focus();
+        toast('בדוק את המשימה ולחץ הוסף');
+      }catch(e){ toast('ההקלטה לא עובדה: '+e.message); }
+      finally{ recorder=null; setRecState('idle'); }
     }
     async function addTask(){
       var title=document.getElementById('titleInput').value.trim();
@@ -532,6 +673,7 @@
       if(e.key==='Enter')saveEdit();
       if(e.key==='Escape')closeEditTask();
     });
+    document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&detailId) closeDetail(); });
     sb.auth.onAuthStateChange(function(event, session) {
       document.body.classList.toggle('signed-out', !session);
       if (!session) { loaded=false; tasks=[]; projects=[]; return; }

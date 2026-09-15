@@ -1,6 +1,6 @@
 {
-  "name": "Kessler Task",
-  "short_name": "Tasks",
+  "name": "Kess-task",
+  "short_name": "Kess-task",
   "description": "Personal task manager",
   "start_url": "./",
   "display": "standalone",
