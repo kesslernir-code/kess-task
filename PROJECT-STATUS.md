@@ -125,8 +125,11 @@ Anything else gets `unauthorized` before any work is done. Responses carry
   are never JSON.
 - The checkpoint (`LAST_MESSAGE_MS`) advances after every message, and a run
   stops itself after 4.5 minutes, so a slow run resumes instead of repeating.
-- Duplicates are ignored by the unique `gmail_message_id`. Apps Script emails
-  the owner when a trigger fails.
+- Duplicates are ignored by the unique `gmail_message_id`. Deleting a Gmail task
+  records its `gmail_message_id` in `private.deleted_gmail_messages` (trigger
+  `remember_deleted_gmail_task`), and `add_gmail_task` skips those ids, so a
+  deleted task is never re-imported. Apps Script emails the owner when a trigger
+  fails.
 - Needs a **paid-tier** Gemini API key: on the free tier Google may use and
   human-review the content, and its terms say not to send personal information.
 
