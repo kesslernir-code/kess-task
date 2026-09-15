@@ -188,8 +188,7 @@
       </div>
 
       <div class="filters">
-        <button class="filter-btn active" onclick="setFilter('all',this)">הכל</button>
-        <button class="filter-btn" onclick="setFilter('active',this)">פעיל</button>
+        <button class="filter-btn active" onclick="setFilter('active',this)">פעיל</button>
         <button class="filter-btn" onclick="setFilter('done',this)">הושלם</button>
         <button class="filter-btn" onclick="setFilter('high',this)">עדיפות גבוהה</button>
       </div>
@@ -264,7 +263,7 @@
   </div>
 
   <script>
-    var tasks=[], projects=[], filter='all', currentProject='all';
+    var tasks=[], projects=[], filter='active', currentProject='all';
     var toastTimer=null;
     var editingId=null, detailId=null, renamingProjectId=null;
     var sb=supabase.createClient('https://qmbdtswkeaayvsufphav.supabase.co','sb_publishable_VSAG1svbd57fNRlQ1r_r5A_cEPgU2nM');
