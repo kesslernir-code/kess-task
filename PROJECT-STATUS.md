@@ -71,6 +71,9 @@ from before their headlines and details were regenerated on 2026-09-15.
   tasks sit on today. Undated tasks are spread over the next 7 days, each onto the
   least busy day (`spreadUndated`), for display only; nothing is saved.
 - Priority is **🔥 עדיפות גבוהה** (a checkbox in the add and edit forms) or regular.
+- **🔁 כל שבוע** (checkbox in the add and edit forms, needs a due date; `repeat_weekly`
+  column): when the task is ticked done, a copy is added on the same weekday, the
+  first one from today on. The overview shows only that next copy.
 - **🔊 היום** (header): reads today's tasks aloud with the browser's speech
   synthesis in Hebrew: a count, then each headline, overdue ones marked באיחור.
   Today's tasks are the same ones the overview shows on today. Pressing again stops.

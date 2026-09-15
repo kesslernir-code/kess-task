@@ -47,7 +47,7 @@
     .proj-edit:hover { color:var(--accent)!important; }
     .main { flex:1; min-width:0; }
     .add-form { background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow); padding:20px; margin-bottom:24px; }
-    .form-row { display:flex; gap:10px; margin-bottom:10px; }
+    .form-row { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:10px; }
     .form-row:last-child { margin-bottom:0; }
     input, textarea, select { background:var(--surface2); border:1px solid transparent; border-radius:10px; color:var(--text-primary); font-family:inherit; font-size:14px; padding:10px 14px; outline:none; transition:border-color 0.15s, box-shadow 0.15s; width:100%; text-align:right; }
     input::placeholder, textarea::placeholder { color:var(--text-muted); }
@@ -103,6 +103,7 @@
     .tag.project { color:#7c3fd6; background:#f1e9fe; }
     .tag.cal { color:#3b63e0; background:#e8efff; cursor:pointer; display:inline-flex; align-items:center; gap:3px; font-family:inherit; }
     .tag.cal:hover { background:#d8e3ff; }
+    .tag.repeat { color:#0f8a6a; background:#e3f7f0; }
     .tag.gmail { color:#b7791f; background:#fef4dc; text-decoration:none; }
     .ov { background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow); padding:16px; }
     .ov-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:6px; }
@@ -195,6 +196,7 @@
             </div>
             <input id="dueDateInput" type="date" onchange="onDateChange(this)"/>
           </div>
+          <label class="check"><input id="repeatInput" type="checkbox"/>🔁 כל שבוע</label>
           <label class="check"><input id="calInput" type="checkbox"/>📆 הוסף ליומן</label>
           <button class="btn" onclick="addTask()">הוסף</button>
         </div>
@@ -235,6 +237,7 @@
       </div>
       <div class="form-row">
         <label class="check"><input id="editHighInput" type="checkbox"/>🔥 עדיפות גבוהה</label>
+        <label class="check"><input id="editRepeatInput" type="checkbox"/>🔁 כל שבוע</label>
       </div>
       <div class="form-row">
         <div class="date-wrap" style="width:100%">
@@ -444,6 +447,7 @@
       document.getElementById('editTitleInput').value = t.title;
       document.getElementById('editDescInput').value = t.description || '';
       document.getElementById('editHighInput').checked = t.priority === 'high';
+      document.getElementById('editRepeatInput').checked = !!t.repeat_weekly;
       var dateVal = t.due_date ? t.due_date.split('T')[0] : '';
       document.getElementById('editDueDateInput').value = dateVal;
       onEditDateChange(document.getElementById('editDueDateInput'));
@@ -467,10 +471,12 @@
     async function saveEdit() {
       var title = document.getElementById('editTitleInput').value.trim();
       if (!title) { toast('הכנס כותרת'); return; }
+      if (document.getElementById('editRepeatInput').checked && !document.getElementById('editDueDateInput').value) { toast('בחר תאריך למשימה החוזרת'); return; }
       var updates = {
         title: title,
         description: document.getElementById('editDescInput').value.trim() || null,
         priority: document.getElementById('editHighInput').checked ? 'high' : 'normal',
+        repeat_weekly: document.getElementById('editRepeatInput').checked,
         due_date: document.getElementById('editDueDateInput').value || null,
         project_id: document.getElementById('editProjectInput').value || null
       };
@@ -537,6 +543,7 @@
           h+='<button class="tag cal" onclick="event.stopPropagation();openCalTag(\''+cu.replace(/'/g,"%27")+'\')">📆 יומן</button>';
         }
       }
+      if(t.repeat_weekly) h+='<span class="tag repeat">🔁 שבועי</span>';
       if(pname) h+='<span class="tag project">'+esc(pname)+'</span>';
       if(t.gmail_link&&t.gmail_link.indexOf('https://mail.google.com/')===0) h+='<a class="tag gmail" href="'+esc(t.gmail_link)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">✉ Gmail</a>';
       return h;
@@ -767,9 +774,10 @@
       if(!title){toast('הכנס כותרת משימה');return;}
       var dueDate=document.getElementById('dueDateInput').value;
       var desc=document.getElementById('descInput').value.trim()||null;
-      var cal=document.getElementById('calInput').checked;
+      var cal=document.getElementById('calInput').checked, repeat=document.getElementById('repeatInput').checked;
+      if(repeat&&!dueDate){toast('בחר תאריך למשימה החוזרת');return;}
       if(cal&&!dueDate){toast('בחר תאריך יעד כדי להוסיף ליומן');return;}
-      var payload={title:title,description:desc,priority:document.getElementById('highInput').checked?'high':'normal',due_date:dueDate||null,project_id:currentProject!=='all'?currentProject:null};
+      var payload={title:title,description:desc,priority:document.getElementById('highInput').checked?'high':'normal',repeat_weekly:repeat,due_date:dueDate||null,project_id:currentProject!=='all'?currentProject:null};
       try{
         var task=must(await sb.from('tasks').insert([payload]).select().single());
         tasks.unshift(task);
@@ -777,6 +785,7 @@
         document.getElementById('descInput').value='';
         document.getElementById('dueDateInput').value='';
         document.getElementById('highInput').checked=false;
+        document.getElementById('repeatInput').checked=false;
         onDateChange(document.getElementById('dueDateInput'));
         render();
         document.getElementById('calInput').checked=false;
@@ -788,8 +797,22 @@
     async function toggle(id,wasDone){
       try{
         var updated=must(await sb.from('tasks').update({status:wasDone?'todo':'done'}).eq('id',id).select().single());
-        tasks=tasks.map(function(t){return t.id===id?updated:t;}); render();
+        tasks=tasks.map(function(t){return t.id===id?updated:t;});
+        if(!wasDone&&updated.repeat_weekly&&updated.due_date) await addNextWeek(updated);
+        render();
       }catch(e){toast('שגיאה');}
+    }
+    // A weekly task that is done comes back on the same weekday, the first one from today on.
+    async function addNextWeek(t){
+      var today=dayKey(new Date()), next=new Date(t.due_date.split('T')[0]+'T00:00');
+      do { next=addDays(next,7); } while(dayKey(next)<today);
+      var due=dayKey(next);
+      // Ticking, unticking and ticking again must not add the same week twice.
+      if(tasks.some(function(x){return x.repeat_weekly&&x.title===t.title&&x.due_date===due;})) return;
+      var copy=must(await sb.from('tasks').insert([{title:t.title,description:t.description,priority:t.priority,
+        project_id:t.project_id,repeat_weekly:true,due_date:due}]).select().single());
+      tasks.unshift(copy);
+      toast('המשימה תחזור ב-'+fmtDate(due));
     }
     async function del(id){
       try{
