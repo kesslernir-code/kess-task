@@ -22,7 +22,7 @@ https://github.com/kesslernir-code/kessler-time
   index.html  (GitHub Pages)                   - Gemini 3.5 Flash-Lite
    - Google sign-in (Supabase Auth)                     |
    - task cards (headline) -> details window            |  rpc/add_gmail_task
-   - record a task (voice memo)  --- fetch ---------->  |  (token, insert-only)
+   - draft a task (voice/photo)  --- fetch ---------->  |  (token, insert-only)
    - categories sidebar, rename / delete                |
           |  supabase-js, publishable key               |
           v                                             v
@@ -37,14 +37,14 @@ https://github.com/kesslernir-code/kessler-time
 |---|---|
 | `index.html` | The whole app. Hebrew RTL, PWA, supabase-js from jsDelivr. |
 | `manifest.json`, `icon.svg` | PWA assets. |
-| `apps-script/gmail-to-tasks.gs` | Gmail → Gemini → task, and voice memo → task fields. Runs in Apps Script ("kess task gmail"), not from this repo. |
+| `apps-script/gmail-to-tasks.gs` | Gmail → Gemini → task, and voice memo and/or picture → task fields. Runs in Apps Script ("kess task gmail"), not from this repo. |
 | `apps-script/appsscript.json`, `.clasp.json` | Apps Script manifest (including the web app) and clasp link. |
 | `apps-script/deploy.sh` | `clasp push --force`, then points the web app deployment (`deployment-id.txt`) at the new code. Needs clasp, installed globally on C: and logged in as kesslernir@gmail.com. A push replaces every file in the Apps Script project. |
 | `apps-script/run.sh` | Calls a runner action through the web app, e.g. `./run.sh dryRun '{"days":14,"limit":30}'`. Reads the runner secret from `~/.kess-task/runner-token.txt` on the local machine. |
 
 ## Data
 
-`tasks`: `id, title, description, priority, status, due_date, created_at,
+`tasks`: `id, title, description, priority ('high' | 'normal'), status, due_date, created_at,
 project_id, source ('manual' | 'gmail'), gmail_message_id (unique), gmail_link`.
 In the app `title` is the **headline** and `description` the **details**.
 
@@ -66,14 +66,26 @@ from before their headlines and details were regenerated on 2026-09-15.
   📜 document, 🦉 message…; ✨ when nothing matches). Clicking the card opens a details window with the
   details, the tags, and an edit button.
 - Tabs above the list: **פעיל** (default, open tasks only), **הושלם** (completed
-  tasks, shown only here), **עדיפות גבוהה**.
+  tasks, shown only here), **עדיפות גבוהה**, and **📅 סקירה**: open tasks as dots on a
+  2–8 week grid of days, with a count per day; clicking a dot opens the task. Overdue
+  tasks sit on today. Undated tasks are spread over the next 7 days, each onto the
+  least busy day (`spreadUndated`), for display only; nothing is saved.
+- Priority is **🔥 עדיפות גבוהה** (a checkbox in the add and edit forms) or regular.
+- **🔊 היום** (header): reads today's tasks aloud with the browser's speech
+  synthesis in Hebrew: a count, then each headline, overdue ones marked באיחור.
+  Today's tasks are the same ones the overview shows on today. Pressing again stops.
 - **📆 הוסף ליומן** (checkbox in the add form): after the task is saved, opens a
   prefilled Google Calendar event for its due date. Needs a due date.
 - **Record a task** (🎤 in the add form): records up to 2 minutes with
   `MediaRecorder`, sends the audio and the signed-in session's access token to the
-  web app's `splitRecording`, and fills the headline, details and due date into the
+  web app's `draftTask`, and fills the headline, details and due date into the
   form for review. The due date is filled only when a date or day is mentioned.
   Nothing is saved until **הוסף** is pressed.
+- **📷 תמונה** (add form): take or pick a picture (a letter, bill, screenshot, note).
+  The app shrinks it to a 1600px JPEG and sends it, with whatever is typed, to
+  `draftTask`, which fills the form. The picture stays attached (✕ removes it) and
+  is sent again with a voice recording, so picture + voice + text become one task.
+  The picture itself is not saved.
 - Categories can be renamed (✎) or deleted (✕) from the sidebar; the buttons show on
   hover and on the selected category.
 
@@ -96,18 +108,18 @@ Anonymous access, runs as the owner. Two kinds of caller:
 - **Runner** — requests carrying the runner secret, whose SHA-256 is
   `RUNNER_TOKEN_HASH` in the script; the secret stays in
   `~/.kess-task/runner-token.txt`. Actions: `setup`, `checkGmail`, `dryRun`,
-  `startBackfill`, `stopBackfill`, `status`, `describeTasks`, `splitRecording`.
+  `startBackfill`, `stopBackfill`, `status`, `describeTasks`, `draftTask`.
 - **The app** — requests carrying a Supabase access token. The script asks
   Supabase (`/auth/v1/user`) who the token belongs to and accepts only
-  `kesslernir@gmail.com` signed in with Google. Action: `splitRecording` only.
+  `kesslernir@gmail.com` signed in with Google. Action: `draftTask` only.
 
 Anything else gets `unauthorized` before any work is done. Responses carry
 `result` and the run log.
 
-- `splitRecording` (`audio` base64, `mimeType`): Gemini gets the audio plus today's
-  date and weekday in Asia/Jerusalem, and answers in plain text
-  `HEADLINE / DETAILS / DUE`. Returns `{ title, description, due_date }`; saves
-  nothing.
+- `draftTask` (`audio` base64 + `mimeType`, and/or `image` base64 + `imageMimeType`,
+  optional `text`): Gemini gets them together plus today's date and weekday in
+  Asia/Jerusalem, and answers in plain text `HEADLINE / DETAILS / DUE`. Returns
+  `{ title, description, due_date }`; saves nothing.
 - `describeTasks` (`tasks: [{ id, gmail_message_id }]`): writes a headline and
   details for each task from its original email; saves nothing, returns proposals.
 - `dryRun` (`days`, `offset`, `limit`) reviews conversations like the backfill but

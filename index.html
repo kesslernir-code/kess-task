@@ -58,8 +58,8 @@
     .date-wrap { position:relative; flex-shrink:0; }
     .date-wrap input[type="date"] { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; z-index:2; color-scheme:light; }
     .date-display { background:var(--surface2); border:1px solid transparent; border-radius:10px; color:var(--text-muted); font-size:13px; padding:10px 14px; white-space:nowrap; display:flex; align-items:center; gap:6px; min-width:140px; user-select:none; cursor:pointer; }
-    .cal-check { display:flex; align-items:center; gap:6px; flex-shrink:0; font-size:13px; color:var(--text-secondary); cursor:pointer; white-space:nowrap; user-select:none; }
-    .cal-check input { width:16px; height:16px; padding:0; accent-color:var(--accent); cursor:pointer; }
+    .check { display:flex; align-items:center; gap:6px; flex-shrink:0; font-size:13px; color:var(--text-secondary); cursor:pointer; white-space:nowrap; user-select:none; }
+    .check input { width:16px; height:16px; padding:0; accent-color:var(--accent); cursor:pointer; }
     .date-display.has-date { background:#eef0ff; color:var(--accent); border-color:var(--border-hover); }
     .btn { background:var(--grad); border:none; border-radius:10px; box-shadow:0 4px 12px rgba(91,108,255,0.3); color:#fff; cursor:pointer; font-family:inherit; font-size:14px; font-weight:500; padding:10px 20px; transition:opacity 0.15s, transform 0.15s; white-space:nowrap; }
     .btn:hover { opacity:0.92; transform:translateY(-1px); }
@@ -98,17 +98,31 @@
     .task-meta { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; align-items:center; }
     .tag { font-size:11px; font-weight:500; padding:3px 9px; border-radius:20px; border:none; }
     .tag.high { color:#c2327f; background:#fde8f3; }
-    .tag.low { color:var(--text-secondary); background:var(--surface2); }
     .tag.due { color:#3b63e0; background:#e8efff; }
     .tag.overdue { color:var(--red); background:#fde8ec; }
     .tag.project { color:#7c3fd6; background:#f1e9fe; }
     .tag.cal { color:#3b63e0; background:#e8efff; cursor:pointer; display:inline-flex; align-items:center; gap:3px; font-family:inherit; }
     .tag.cal:hover { background:#d8e3ff; }
     .tag.gmail { color:#b7791f; background:#fef4dc; text-decoration:none; }
+    .ov { background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow); padding:16px; }
+    .ov-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:6px; }
+    .ov-head { font-size:11px; font-weight:600; color:var(--text-muted); text-align:center; padding-bottom:2px; }
+    .ov-day { background:var(--surface2); border-radius:10px; min-height:72px; padding:6px; display:flex; flex-direction:column; gap:5px; }
+    .ov-day.past { opacity:0.45; }
+    .ov-day.today { background:#eef0ff; box-shadow:inset 0 0 0 2px var(--accent); }
+    .ov-date { display:flex; justify-content:space-between; font-size:11px; color:var(--text-secondary); }
+    .ov-count { font-weight:600; color:var(--accent); }
+    .ov-dots { display:flex; flex-wrap:wrap; gap:4px; }
+    .dot { display:inline-block; width:12px; height:12px; border:none; border-radius:50%; padding:0; background:var(--grad); cursor:pointer; }
+    .dot.overdue { background:var(--red); }
+    .dot.undated { background:transparent; box-shadow:inset 0 0 0 2px var(--accent); }
+    .ov-more { margin-top:10px; font-size:12px; color:var(--text-muted); }
+    .ov-legend { display:flex; flex-wrap:wrap; gap:14px; margin-top:12px; font-size:12px; color:var(--text-secondary); }
+    .ov-legend .dot { cursor:default; margin-inline-end:5px; vertical-align:-1px; }
     .signout-btn { margin-inline-start:auto; }
     .login-screen { display:none; text-align:center; padding:80px 0; }
     body.signed-out .login-screen { display:block; }
-    body.signed-out .app, body.signed-out .signout-btn { display:none; }
+    body.signed-out .app, body.signed-out .signout-btn, body.signed-out .speak-btn { display:none; }
     .task-actions { flex-shrink:0; display:flex; flex-direction:column; gap:4px; }
     .icon-btn { background:transparent; border:none; border-radius:6px; color:var(--text-muted); cursor:pointer; font-size:13px; padding:4px; transition:all 0.15s; line-height:1; }
     .icon-btn:hover { color:var(--red); background:#fde8ec; }
@@ -145,6 +159,7 @@
       <h1>המשימות <span>שלי</span></h1>
     </div>
     <button class="btn-ghost signout-btn" onclick="signOut()">התנתק</button>
+    <button class="btn speak-btn" onclick="speakToday()" title="הקרא את המשימות של היום">🔊 היום</button>
   </header>
 
   <div class="login-screen">
@@ -165,16 +180,14 @@
         <div class="form-row">
           <input id="titleInput" class="title-input" type="text" placeholder="כותרת המשימה..." autocomplete="off"/>
           <button class="btn-ghost btn-rec" id="recBtn" onclick="toggleRecording()" title="הקלט משימה">🎤 הקלט</button>
+          <label class="btn-ghost btn-rec" title="צלם או צרף תמונה"><span id="photoLabel">📷 תמונה</span><input id="photoInput" type="file" accept="image/*" hidden onchange="onPhoto(this)"/></label>
+          <button class="icon-btn" id="photoClear" hidden onclick="clearPhoto()" title="הסר תמונה">✕</button>
         </div>
         <div class="form-row">
           <textarea id="descInput" placeholder="פרטים (אופציונלי)"></textarea>
         </div>
         <div class="form-row">
-          <select id="priorityInput">
-            <option value="normal">עדיפות: רגילה</option>
-            <option value="high">עדיפות: גבוהה</option>
-            <option value="low">עדיפות: נמוכה</option>
-          </select>
+          <label class="check"><input id="highInput" type="checkbox"/>🔥 עדיפות גבוהה</label>
           <div class="date-wrap">
             <div class="date-display" id="dateDisplay">
               <span>📅</span>
@@ -182,7 +195,7 @@
             </div>
             <input id="dueDateInput" type="date" onchange="onDateChange(this)"/>
           </div>
-          <label class="cal-check"><input id="calInput" type="checkbox"/>📆 הוסף ליומן</label>
+          <label class="check"><input id="calInput" type="checkbox"/>📆 הוסף ליומן</label>
           <button class="btn" onclick="addTask()">הוסף</button>
         </div>
       </div>
@@ -191,6 +204,7 @@
         <button class="filter-btn active" onclick="setFilter('active',this)">פעיל</button>
         <button class="filter-btn" onclick="setFilter('done',this)">הושלם</button>
         <button class="filter-btn" onclick="setFilter('high',this)">עדיפות גבוהה</button>
+        <button class="filter-btn" onclick="setFilter('overview',this)">📅 סקירה</button>
       </div>
 
       <div id="taskList"><div class="loading">טוען...</div></div>
@@ -220,11 +234,7 @@
         <textarea id="editDescInput" placeholder="פרטים (אופציונלי)"></textarea>
       </div>
       <div class="form-row">
-        <select id="editPriorityInput">
-          <option value="normal">עדיפות: רגילה</option>
-          <option value="high">עדיפות: גבוהה</option>
-          <option value="low">עדיפות: נמוכה</option>
-        </select>
+        <label class="check"><input id="editHighInput" type="checkbox"/>🔥 עדיפות גבוהה</label>
       </div>
       <div class="form-row">
         <div class="date-wrap" style="width:100%">
@@ -272,6 +282,7 @@
     var SCRIPT_URL='https://script.google.com/macros/s/AKfycbza0DRcMq4tm4bfG9DznuBfXq2IuPXg4rdLb299PDS_a92VqCzNzrjzme2U40H4ort0Dw/exec';
     var MAX_RECORDING_MS=120000;
     var recorder=null, recTimer=null;
+    var photo=null;   // the attached picture { data, mimeType }, also sent with a recording
 
     function must(r) { if (r.error) throw new Error(r.error.message); return r.data; }
     function signIn() { sb.auth.signInWithOAuth({provider:'google', options:{redirectTo:location.origin+location.pathname}}); }
@@ -432,7 +443,7 @@
       editingId = id;
       document.getElementById('editTitleInput').value = t.title;
       document.getElementById('editDescInput').value = t.description || '';
-      document.getElementById('editPriorityInput').value = t.priority || 'normal';
+      document.getElementById('editHighInput').checked = t.priority === 'high';
       var dateVal = t.due_date ? t.due_date.split('T')[0] : '';
       document.getElementById('editDueDateInput').value = dateVal;
       onEditDateChange(document.getElementById('editDueDateInput'));
@@ -459,7 +470,7 @@
       var updates = {
         title: title,
         description: document.getElementById('editDescInput').value.trim() || null,
-        priority: document.getElementById('editPriorityInput').value,
+        priority: document.getElementById('editHighInput').checked ? 'high' : 'normal',
         due_date: document.getElementById('editDueDateInput').value || null,
         project_id: document.getElementById('editProjectInput').value || null
       };
@@ -502,6 +513,7 @@
       return p?p.name:null;
     }
     function render(){
+      if(filter==='overview'){ document.getElementById('taskList').innerHTML=overviewHtml(); return; }
       var list=filtered();
       var active=list.filter(function(t){return t.status!=='done';});
       var done=list.filter(function(t){return t.status==='done';});
@@ -518,7 +530,6 @@
       var dateStr=t.due_date?t.due_date.split('T')[0]:null;
       var pname=showProject?projectName(t.project_id):null;
       if(t.priority==='high') h+='<span class="tag high">גבוהה</span>';
-      if(t.priority==='low') h+='<span class="tag low">נמוכה</span>';
       if(dateStr){
         h+='<span class="tag '+(od?'overdue':'due')+'">'+(od?'באיחור · ':'')+fmtDate(dateStr)+'</span>';
         if(!isDone){
@@ -550,6 +561,72 @@
       var text=t.title+' '+(t.description||'');
       var hit=FANTASY_ICONS.find(function(r){return r[0].test(text);});
       return hit?hit[1]:'✨';
+    }
+    // Open tasks by day, for the overview tab and read-aloud. Overdue tasks sit on today;
+    // undated ones are spread over the next 7 days for display only, nothing is saved.
+    function spreadUndated(counts,undated){
+      // Each undated task goes to the least busy day, the earliest on a tie.
+      return undated.map(function(){
+        var i=counts.indexOf(Math.min.apply(null,counts)); counts[i]++; return i;
+      });
+    }
+    console.assert(JSON.stringify(spreadUndated([3,0,1,0,2,0,0],[1,2,3,4,5]))==='[1,3,5,6,1]','spreadUndated');
+    function dayKey(d){return d.toLocaleDateString('sv-SE');}
+    function addDays(d,n){var x=new Date(d); x.setDate(x.getDate()+n); return x;}
+    function tasksByDay(today){
+      var todayKey=dayKey(today), byDay={}, undated=[];
+      var put=function(k,t,kind){(byDay[k]=byDay[k]||[]).push({t:t,kind:kind});};
+      tasks.forEach(function(t){
+        if(t.status==='done') return;
+        var d=t.due_date?t.due_date.split('T')[0]:null;
+        if(!d) undated.push(t); else if(d<todayKey) put(todayKey,t,'overdue'); else put(d,t,'due');
+      });
+      var week=[0,1,2,3,4,5,6].map(function(i){return dayKey(addDays(today,i));});
+      spreadUndated(week.map(function(k){return (byDay[k]||[]).length;}),undated)
+        .forEach(function(i,j){put(week[i],undated[j],'undated');});
+      return byDay;
+    }
+    function overviewHtml(){
+      var MAX_WEEKS=8, dayNames=['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'];
+      var today=new Date(new Date().toDateString()), todayKey=dayKey(today), byDay=tasksByDay(today);
+      var start=addDays(today,-today.getDay());
+      var lastKey=Object.keys(byDay).sort().pop()||todayKey;
+      var span=Math.round((new Date(lastKey+'T00:00')-start)/864e5);
+      var weeks=Math.min(MAX_WEEKS,Math.max(2,Math.ceil((span+1)/7)));
+      var endKey=dayKey(addDays(start,weeks*7-1));
+      var h='<div class="ov"><div class="ov-grid">';
+      dayNames.forEach(function(n){h+='<div class="ov-head">'+n+'</div>';});
+      for(var i=0;i<weeks*7;i++){
+        var d=addDays(start,i), k=dayKey(d), items=byDay[k]||[];
+        h+='<div class="ov-day'+(k<todayKey?' past':'')+(k===todayKey?' today':'')+'">';
+        h+='<div class="ov-date"><span>'+d.getDate()+'/'+(d.getMonth()+1)+'</span>'+(items.length?'<span class="ov-count">'+items.length+'</span>':'')+'</div><div class="ov-dots">';
+        items.forEach(function(it){
+          h+='<button class="dot '+it.kind+'" title="'+esc(it.t.title)+'" aria-label="'+esc(it.t.title)+'" onclick="openDetail(\''+it.t.id+'\')"></button>';
+        });
+        h+='</div></div>';
+      }
+      h+='</div>';
+      var later=Object.keys(byDay).filter(function(k){return k>endKey;}).reduce(function(n,k){return n+byDay[k].length;},0);
+      if(later) h+='<div class="ov-more">ועוד '+later+' משימות מאוחר יותר</div>';
+      h+='<div class="ov-legend"><span><span class="dot due"></span>תאריך יעד</span><span><span class="dot undated"></span>בלי תאריך (שובץ לתצוגה)</span><span><span class="dot overdue"></span>באיחור</span></div>';
+      return h+'</div>';
+    }
+    // Reads today's tasks aloud, e.g. in the car. Pressing again stops.
+    function speakToday(){
+      var synth=window.speechSynthesis;
+      if(!synth){ toast('הדפדפן לא תומך בהקראה'); return; }
+      if(synth.speaking){ synth.cancel(); return; }
+      var today=new Date(new Date().toDateString());
+      var items=tasksByDay(today)[dayKey(today)]||[];
+      var lines=[items.length===0?'אין משימות להיום.':items.length===1?'יש לך משימה אחת להיום.':'יש לך '+items.length+' משימות להיום.'];
+      items.forEach(function(it){ lines.push((it.kind==='overdue'?'באיחור: ':'')+it.t.title+'.'); });
+      var voice=synth.getVoices().find(function(v){return /^he/i.test(v.lang);});
+      // One utterance per line: Chrome cuts off long ones.
+      lines.forEach(function(line){
+        var u=new SpeechSynthesisUtterance(line);
+        u.lang='he-IL'; if(voice) u.voice=voice;
+        synth.speak(u);
+      });
     }
     function group(label,items){
       var h='<div class="task-group"><div class="section-label">'+label+' <span class="count">'+items.length+'</span></div>';
@@ -591,7 +668,7 @@
       if(id) openEditTask(id);
     }
 
-    // ---- Voice memo -> headline, details, due date (filled into the form to review) ----
+    // ---- Voice memo and/or picture -> headline, details, due date (filled into the form to review) ----
     function setRecState(state){
       var b=document.getElementById('recBtn');
       b.classList.toggle('recording',state==='recording');
@@ -626,14 +703,52 @@
       });
     }
     async function sendRecording(blob){
+      if(!blob.size){ recorder=null; setRecState('idle'); toast('ההקלטה ריקה'); return; }
+      var fields={mimeType:blob.type, audio:await blobToBase64(blob)};
+      if(photo){ fields.image=photo.data; fields.imageMimeType=photo.mimeType; }
+      await draftTask(fields);
+    }
+    async function onPhoto(input){
+      var file=input.files[0];
+      input.value='';
+      if(!file) return;
+      try{ photo=await shrinkImage(file); }
+      catch(e){ toast('לא ניתן לקרוא את התמונה'); return; }
+      setPhotoState();
+      await draftTask({image:photo.data, imageMimeType:photo.mimeType});
+    }
+    function clearPhoto(){ photo=null; setPhotoState(); }
+    function setPhotoState(){
+      document.getElementById('photoLabel').textContent=photo?'📷 ✓ מצורפת':'📷 תמונה';
+      document.getElementById('photoClear').hidden=!photo;
+    }
+    // Phone photos are several MB; a 1600px JPEG is plenty to read and quick to send.
+    function shrinkImage(file){
+      return new Promise(function(resolve,reject){
+        var img=new Image(), url=URL.createObjectURL(file);
+        img.onload=function(){
+          var scale=Math.min(1,1600/Math.max(img.width,img.height));
+          var c=document.createElement('canvas');
+          c.width=Math.round(img.width*scale); c.height=Math.round(img.height*scale);
+          c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+          URL.revokeObjectURL(url);
+          resolve({data:c.toDataURL('image/jpeg',0.85).split(',')[1], mimeType:'image/jpeg'});
+        };
+        img.onerror=function(){ URL.revokeObjectURL(url); reject(new Error('unreadable image')); };
+        img.src=url;
+      });
+    }
+    // Sends a recording and/or picture, plus whatever is already typed, and fills the form with the draft.
+    async function draftTask(fields){
       setRecState('busy');
       try{
-        if(!blob.size) throw new Error('ההקלטה ריקה');
         var session=(await sb.auth.getSession()).data.session;
         if(!session) throw new Error('יש להתחבר מחדש');
-        var res=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify({
-          action:'splitRecording', accessToken:session.access_token, mimeType:blob.type, audio:await blobToBase64(blob)
-        })});
+        var typed=[document.getElementById('titleInput').value,document.getElementById('descInput').value]
+          .map(function(v){return v.trim();}).filter(Boolean).join('\n');
+        var res=await fetch(SCRIPT_URL,{method:'POST',body:JSON.stringify(Object.assign({
+          action:'draftTask', accessToken:session.access_token, text:typed
+        },fields))});
         var out=await res.json();
         if(!out.ok) throw new Error(out.error||'שגיאה');
         var r=out.result;
@@ -644,7 +759,7 @@
         onDateChange(dateInput);
         document.getElementById('titleInput').focus();
         toast('בדוק את המשימה ולחץ הוסף');
-      }catch(e){ toast('ההקלטה לא עובדה: '+e.message); }
+      }catch(e){ toast('לא הצלחתי ליצור משימה: '+e.message); }
       finally{ recorder=null; setRecState('idle'); }
     }
     async function addTask(){
@@ -654,17 +769,18 @@
       var desc=document.getElementById('descInput').value.trim()||null;
       var cal=document.getElementById('calInput').checked;
       if(cal&&!dueDate){toast('בחר תאריך יעד כדי להוסיף ליומן');return;}
-      var payload={title:title,description:desc,priority:document.getElementById('priorityInput').value,due_date:dueDate||null,project_id:currentProject!=='all'?currentProject:null};
+      var payload={title:title,description:desc,priority:document.getElementById('highInput').checked?'high':'normal',due_date:dueDate||null,project_id:currentProject!=='all'?currentProject:null};
       try{
         var task=must(await sb.from('tasks').insert([payload]).select().single());
         tasks.unshift(task);
         document.getElementById('titleInput').value='';
         document.getElementById('descInput').value='';
         document.getElementById('dueDateInput').value='';
-        document.getElementById('priorityInput').value='normal';
+        document.getElementById('highInput').checked=false;
         onDateChange(document.getElementById('dueDateInput'));
         render();
         document.getElementById('calInput').checked=false;
+        clearPhoto();
         toast('משימה נוספה');
         if(cal) location.href=gcalUrl(title,dueDate,desc);
       }catch(e){toast('שגיאה: '+e.message);}
